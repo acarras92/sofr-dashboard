@@ -22,16 +22,8 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Install dependencies
-        run: |
-          npm install
-          npx playwright install chromium --with-deps
-
       - name: Run scraper
         run: node scrape.js
-        env:
-          CHATHAM_EMAIL: ${{ secrets.CHATHAM_EMAIL }}
-          CHATHAM_PASSWORD: ${{ secrets.CHATHAM_PASSWORD }}
 
       - name: Commit updated data
         run: |
