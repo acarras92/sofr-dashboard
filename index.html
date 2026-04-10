@@ -253,7 +253,7 @@ let historyData = [];
 let latestData = null;
 let curveChart, trendChart, spreadChart;
 
-const TENOR_ORDER = ['0M','1M','3M','6M','9M','12M','18M','2Y','3Y','4Y','5Y','7Y','10Y','15Y','20Y','30Y'];
+const TENOR_ORDER = ['O/N','30D','90D','1M','3M','6M','9M','12M','18M','1Y','2Y','3Y','4Y','5Y','6Y','7Y','8Y','10Y','12Y','15Y','20Y','30Y'];
 
 function tenorIndex(t) {
   const i = TENOR_ORDER.indexOf(t);
@@ -338,15 +338,16 @@ function renderKPIs(prev) {
   const container = document.getElementById('kpiRow');
   const cards = [];
 
-  // 1M Term SOFR
-  const termSofr1m = latestData.termSOFR['1M'];
-  const prevTermSofr1m = prev?.termSOFR?.['1M'];
-  cards.push(kpiCard('1M Term SOFR', termSofr1m ? termSofr1m.toFixed(2) + '%' : '--', bpsChange(termSofr1m, prevTermSofr1m)));
+  // Overnight SOFR or 1M Term SOFR
+  const overnightRate = latestData.overnightSOFR || latestData.termSOFR?.['1M'];
+  const prevOvernightRate = prev?.overnightSOFR || prev?.termSOFR?.['1M'];
+  const overnightLabel = latestData.overnightSOFR ? 'Overnight SOFR' : '1M Term SOFR';
+  cards.push(kpiCard(overnightLabel, overnightRate ? overnightRate.toFixed(2) + '%' : '--', bpsChange(overnightRate, prevOvernightRate)));
 
-  // 1Y Forward
-  const fwd1y = latestData.forwardCurve['12M'] || latestData.swapRates['1Y'];
-  const prevFwd1y = prev?.forwardCurve?.['12M'] || prev?.swapRates?.['1Y'];
-  cards.push(kpiCard('1Y Forward Rate', fwd1y ? fwd1y.toFixed(2) + '%' : '--', bpsChange(fwd1y, prevFwd1y)));
+  // 1Y Swap Rate
+  const fwd1y = latestData.swapRates?.['1Y'] || latestData.forwardCurve?.['1Y'] || latestData.forwardCurve?.['12M'];
+  const prevFwd1y = prev?.swapRates?.['1Y'] || prev?.forwardCurve?.['1Y'] || prev?.forwardCurve?.['12M'];
+  cards.push(kpiCard('1Y Swap Rate', fwd1y ? fwd1y.toFixed(2) + '%' : '--', bpsChange(fwd1y, prevFwd1y)));
 
   // 3Y Swap
   const swap3y = latestData.swapRates['3Y'];
@@ -611,12 +612,13 @@ function renderTable(prev, weekAgo, monthAgo) {
   for (const t of Object.keys(latestData.forwardCurve || {})) allTenors.add(t);
   for (const t of Object.keys(latestData.swapRates || {})) allTenors.add(t);
   for (const t of Object.keys(latestData.termSOFR || {})) allTenors.add(t);
+  for (const t of Object.keys(latestData.treasuryYields || {})) allTenors.add(t);
 
   const sorted = [...allTenors].sort((a, b) => tenorIndex(a) - tenorIndex(b));
 
   const getRate = (snap, tenor) => {
     if (!snap) return null;
-    return snap.forwardCurve?.[tenor] ?? snap.swapRates?.[tenor] ?? snap.termSOFR?.[tenor] ?? null;
+    return snap.forwardCurve?.[tenor] ?? snap.swapRates?.[tenor] ?? snap.termSOFR?.[tenor] ?? snap.treasuryYields?.[tenor] ?? null;
   };
 
   let html = '';

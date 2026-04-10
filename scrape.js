@@ -8,185 +8,64 @@ const HISTORY_FILE = path.join(DATA_DIR, 'sofr_history.json');
 const LATEST_FILE = path.join(DATA_DIR, 'sofr_latest.json');
 const SCREENSHOT_FILE = path.join(DATA_DIR, 'latest_screenshot.png');
 
+// Chatham public API endpoints discovered via network interception
+const API_BASE = 'https://cf.com/public-api/public-rates';
+const ENDPOINTS = {
+  sofr1day:       `${API_BASE}/sofr1day.json`,
+  sofr30day:      `${API_BASE}/sofr30day.json`,
+  sofr90day:      `${API_BASE}/sofr90day.json`,
+  sofr1month:     `${API_BASE}/sofr1month.json`,
+  sofr3month:     `${API_BASE}/sofr3month.json`,
+  sofrSwaps:      `${API_BASE}/AnnualSOFRCompoundSwapRates.json`,
+  termSofrSwaps:  `${API_BASE}/1moTermSOFRSwapRates.json`,
+  treasuryYield:  `${API_BASE}/yield.json`,
+  fedFunds:       `${API_BASE}/federalFundsEffective.json`,
+  prime:          `${API_BASE}/usdPrime.json`,
+};
+
 async function main() {
-  // Ensure data directory exists
   if (!fs.existsSync(DATA_DIR)) {
     fs.mkdirSync(DATA_DIR, { recursive: true });
   }
 
   const browser = await chromium.launch({ headless: true });
   const context = await browser.newContext({
-    viewport: { width: 1920, height: 1080 },
     userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
   });
   const page = await context.newPage();
 
-  // Collect intercepted API data
-  const apiData = {};
-  page.on('response', async (response) => {
-    const url = response.url();
-    if (url.includes('rate') || url.includes('sofr') || url.includes('curve') || url.includes('swap') || url.includes('forward') || url.includes('market')) {
-      try {
-        const json = await response.json();
-        console.log('Found API endpoint:', url);
-        console.log('Data sample:', JSON.stringify(json).substring(0, 500));
-        apiData[url] = json;
-      } catch (e) { /* not JSON, skip */ }
-    }
-  });
-
   try {
-    // Step 1: Log in to Chatham Financial
-    const email = process.env.CHATHAM_EMAIL;
-    const password = process.env.CHATHAM_PASSWORD;
-
-    if (!email || !password) {
-      console.warn('⚠ CHATHAM_EMAIL or CHATHAM_PASSWORD not set — attempting without login');
-    } else {
-      console.log('Logging in to Chatham Financial...');
-      await page.goto('https://cf.com/login', { waitUntil: 'networkidle', timeout: 30000 });
-      await page.screenshot({ path: path.join(DATA_DIR, 'login_page.png') });
-
-      // Try multiple possible selectors for email/password fields
-      const emailSelectors = ['input[type="email"]', 'input[name="email"]', 'input[name="username"]', '#email', '#username'];
-      const passwordSelectors = ['input[type="password"]', 'input[name="password"]', '#password'];
-
-      let emailFilled = false;
-      for (const sel of emailSelectors) {
-        try {
-          const el = await page.$(sel);
-          if (el) {
-            await el.fill(email);
-            emailFilled = true;
-            console.log(`  Email filled using selector: ${sel}`);
-            break;
-          }
-        } catch (e) { /* try next */ }
-      }
-
-      let passwordFilled = false;
-      for (const sel of passwordSelectors) {
-        try {
-          const el = await page.$(sel);
-          if (el) {
-            await el.fill(password);
-            passwordFilled = true;
-            console.log(`  Password filled using selector: ${sel}`);
-            break;
-          }
-        } catch (e) { /* try next */ }
-      }
-
-      if (emailFilled && passwordFilled) {
-        // Click submit
-        const submitSelectors = ['button[type="submit"]', 'input[type="submit"]', 'button:has-text("Log in")', 'button:has-text("Sign in")'];
-        for (const sel of submitSelectors) {
-          try {
-            const btn = await page.$(sel);
-            if (btn) {
-              await btn.click();
-              console.log(`  Submitted using selector: ${sel}`);
-              break;
-            }
-          } catch (e) { /* try next */ }
+    // Fetch all API endpoints in parallel using the browser context
+    console.log('Fetching Chatham Financial rate data...');
+    const results = {};
+    for (const [key, url] of Object.entries(ENDPOINTS)) {
+      try {
+        const response = await page.request.get(url);
+        if (response.ok()) {
+          results[key] = await response.json();
+          console.log(`  ✓ ${key}`);
+        } else {
+          console.log(`  ✗ ${key}: HTTP ${response.status()}`);
         }
-        // Wait for navigation after login
-        try {
-          await page.waitForNavigation({ waitUntil: 'networkidle', timeout: 15000 });
-        } catch (e) {
-          console.log('  Navigation after login timed out — continuing anyway');
-        }
-        await page.screenshot({ path: path.join(DATA_DIR, 'post_login.png') });
-        console.log('✓ Login attempted');
-      } else {
-        console.warn('⚠ Could not find login form fields — continuing without login');
+      } catch (e) {
+        console.log(`  ✗ ${key}: ${e.message}`);
       }
     }
 
-    // Step 2: Navigate to rates page
-    console.log('Navigating to rates page...');
-    await page.goto('https://www.chathamfinancial.com/technology/us-market-rates', {
-      waitUntil: 'networkidle',
-      timeout: 45000
-    });
-
-    // Wait for rate tables to render (React app)
+    // Also take a screenshot of the rates page for reference
     try {
-      await page.waitForSelector('table, [class*="rate"], [class*="table"], [class*="grid"]', { timeout: 20000 });
-      console.log('✓ Rate content detected');
+      await page.goto('https://cf.com/rates/us', { waitUntil: 'domcontentloaded', timeout: 30000 });
+      await page.waitForTimeout(5000);
+      await page.screenshot({ path: SCREENSHOT_FILE, fullPage: true });
+      console.log('  ✓ Screenshot saved');
     } catch (e) {
-      console.log('⚠ No table/rate elements found — page may require auth or different structure');
+      console.log('  ⚠ Screenshot skipped:', e.message.substring(0, 80));
     }
 
-    // Give React extra time to hydrate
-    await page.waitForTimeout(3000);
-    await page.screenshot({ path: SCREENSHOT_FILE, fullPage: true });
-    console.log('✓ Screenshot saved');
+    // Build the snapshot from API data
+    const snapshot = buildSnapshot(results);
 
-    // Step 3: Log all network requests for debugging
-    console.log('\n--- All intercepted API endpoints ---');
-    for (const [url, data] of Object.entries(apiData)) {
-      console.log(`  ${url}`);
-    }
-    console.log('---\n');
-
-    // Step 4: Scrape rate data from the page
-    const scrapedData = await page.evaluate(() => {
-      const result = {
-        termSOFR: {},
-        swapRates: {},
-        forwardCurve: {},
-        rawTables: []
-      };
-
-      // Grab all tables on the page
-      const tables = document.querySelectorAll('table');
-      tables.forEach((table, idx) => {
-        const headerRow = table.querySelector('thead tr, tr:first-child');
-        const headerText = headerRow ? headerRow.textContent.trim() : '';
-        const rows = [];
-        table.querySelectorAll('tbody tr, tr').forEach(tr => {
-          const cells = [];
-          tr.querySelectorAll('td, th').forEach(td => {
-            cells.push(td.textContent.trim());
-          });
-          if (cells.length > 0) rows.push(cells);
-        });
-        result.rawTables.push({ index: idx, header: headerText, rows });
-      });
-
-      // Also grab any rate-like elements outside tables
-      const allText = document.body.innerText;
-
-      // Look for patterns like "1M SOFR: 4.82%" or "1 Month: 4.82"
-      const ratePatterns = allText.match(/(\d+[MY]\s*(?:Term\s*)?SOFR|(?:Term\s+)?SOFR\s*\d+[MY])\s*[:\s]+(\d+\.\d+)/gi);
-      if (ratePatterns) {
-        result.ratePatterns = ratePatterns;
-      }
-
-      // Look for swap rate patterns
-      const swapPatterns = allText.match(/(\d+[Y]\s*(?:Swap|OIS))\s*[:\s]+(\d+\.\d+)/gi);
-      if (swapPatterns) {
-        result.swapPatterns = swapPatterns;
-      }
-
-      return result;
-    });
-
-    console.log('Raw tables found:', scrapedData.rawTables.length);
-    scrapedData.rawTables.forEach(t => {
-      console.log(`  Table ${t.index}: "${t.header.substring(0, 80)}" — ${t.rows.length} rows`);
-      t.rows.slice(0, 3).forEach(r => console.log(`    ${JSON.stringify(r)}`));
-    });
-
-    if (scrapedData.ratePatterns) {
-      console.log('Rate patterns found:', scrapedData.ratePatterns);
-    }
-
-    // Step 5: Parse scraped data into structured format
-    const snapshot = parseRateData(scrapedData, apiData);
-
-    // Step 6: Save to history
+    // Save to history
     let history = [];
     if (fs.existsSync(HISTORY_FILE)) {
       try {
@@ -197,7 +76,7 @@ async function main() {
       }
     }
 
-    // Remove existing entry for today if re-running
+    // Replace today's entry if re-running
     const today = snapshot.date;
     history = history.filter(entry => entry.date !== today);
     history.push(snapshot);
@@ -214,17 +93,13 @@ async function main() {
 
   } catch (error) {
     console.error('✗ Scraper error:', error.message);
-    // Take error screenshot
-    try {
-      await page.screenshot({ path: path.join(DATA_DIR, 'error_screenshot.png'), fullPage: true });
-    } catch (e) { /* ignore */ }
     process.exit(1);
   } finally {
     await browser.close();
   }
 }
 
-function parseRateData(scrapedData, apiData) {
+function buildSnapshot(results) {
   const now = new Date();
   const dateStr = now.toISOString().split('T')[0];
 
@@ -232,101 +107,112 @@ function parseRateData(scrapedData, apiData) {
     date: dateStr,
     timestamp: now.toISOString(),
     source: 'Chatham Financial cf.com/rates/us',
+    overnightSOFR: null,
+    fedFundsRate: null,
+    prime: null,
     termSOFR: {},
     swapRates: {},
-    forwardCurve: {}
+    forwardCurve: {},
+    treasuryYields: {}
   };
 
-  // Try to parse from API data first (most reliable)
-  for (const [url, data] of Object.entries(apiData)) {
-    if (Array.isArray(data)) {
-      data.forEach(item => {
-        if (item.tenor && item.rate != null) {
-          categorizeRate(snapshot, item.tenor, parseFloat(item.rate));
-        }
-      });
-    } else if (typeof data === 'object' && data !== null) {
-      // Try common API response shapes
-      const possibleArrays = ['rates', 'data', 'results', 'items', 'curve', 'forwardCurve', 'swapRates'];
-      for (const key of possibleArrays) {
-        if (Array.isArray(data[key])) {
-          data[key].forEach(item => {
-            const tenor = item.tenor || item.term || item.maturity || item.label;
-            const rate = item.rate || item.value || item.mid;
-            if (tenor && rate != null) {
-              categorizeRate(snapshot, String(tenor), parseFloat(rate));
-            }
-          });
-        }
+  // Overnight SOFR
+  if (results.sofr1day) {
+    snapshot.overnightSOFR = parseFloat(results.sofr1day.PreviousDay);
+    snapshot.forwardCurve['O/N'] = snapshot.overnightSOFR;
+  }
+
+  // Fed Funds
+  if (results.fedFunds) {
+    snapshot.fedFundsRate = parseFloat((parseFloat(results.fedFunds.PreviousDay) * 100).toFixed(3));
+  }
+
+  // Prime
+  if (results.prime) {
+    snapshot.prime = parseFloat((parseFloat(results.prime.PreviousDay) * 100).toFixed(3));
+  }
+
+  // Term SOFR fixings (CME Term SOFR)
+  // sofr1month = 1M Term SOFR, sofr3month = 3M Term SOFR
+  if (results.sofr1month) {
+    snapshot.termSOFR['1M'] = parseFloat(results.sofr1month.PreviousDay);
+  }
+  if (results.sofr3month) {
+    snapshot.termSOFR['3M'] = parseFloat(results.sofr3month.PreviousDay);
+  }
+  // 30-day and 90-day SOFR averages
+  if (results.sofr30day) {
+    snapshot.termSOFR['30D'] = parseFloat(results.sofr30day.PreviousDay);
+  }
+  if (results.sofr90day) {
+    snapshot.termSOFR['90D'] = parseFloat(results.sofr90day.PreviousDay);
+  }
+
+  // SOFR OIS Swap Rates (Annual Compound)
+  // API returns: { Rates: [{ LengthInMonths: 12, PreviousDay: "3.705" }, ...] }
+  if (results.sofrSwaps && results.sofrSwaps.Rates) {
+    for (const r of results.sofrSwaps.Rates) {
+      const tenor = monthsToTenor(r.LengthInMonths);
+      const rate = parseFloat(r.PreviousDay);
+      if (tenor && !isNaN(rate)) {
+        snapshot.swapRates[tenor] = rate;
+        snapshot.forwardCurve[tenor] = rate;
       }
-      // Also check if it's a flat object like { "1M": 4.82, "3M": 4.85 }
-      for (const [key, val] of Object.entries(data)) {
-        if (typeof val === 'number' && /^\d+[MY]$/.test(key)) {
-          categorizeRate(snapshot, key, val);
+    }
+  }
+
+  // 1M Term SOFR Swap Rates (alternative curve)
+  if (results.termSofrSwaps && results.termSofrSwaps.Rates) {
+    for (const r of results.termSofrSwaps.Rates) {
+      const tenor = monthsToTenor(r.LengthInMonths);
+      const rate = parseFloat(r.PreviousDay);
+      if (tenor && !isNaN(rate)) {
+        // Store as termSofrSwaps for reference; don't overwrite main swapRates
+        if (!snapshot.termSofrSwaps) snapshot.termSofrSwaps = {};
+        snapshot.termSofrSwaps[tenor] = rate;
+      }
+    }
+  }
+
+  // Treasury Yields
+  // API returns: { Rates: [{ Year: "1 Year", PreviousDayYield: "3.672" }, ...] }
+  if (results.treasuryYield && results.treasuryYield.Rates) {
+    for (const r of results.treasuryYield.Rates) {
+      const match = r.Year.match(/(\d+)\s*Year/i);
+      if (match) {
+        const tenor = match[1] + 'Y';
+        const rate = parseFloat(r.PreviousDayYield);
+        if (!isNaN(rate)) {
+          snapshot.treasuryYields[tenor] = rate;
         }
       }
     }
   }
 
-  // Then try to parse from scraped tables
-  for (const table of scrapedData.rawTables) {
-    for (const row of table.rows) {
-      if (row.length >= 2) {
-        const tenorCell = row[0];
-        // Look for rate values in remaining cells
-        for (let i = 1; i < row.length; i++) {
-          const rateStr = row[i].replace(/[%,]/g, '').trim();
-          const rate = parseFloat(rateStr);
-          if (!isNaN(rate) && rate > 0 && rate < 20) {
-            // Normalize tenor
-            const tenor = normalizeTenor(tenorCell);
-            if (tenor) {
-              categorizeRate(snapshot, tenor, rate);
-              break; // Take first rate value
-            }
-          }
-        }
-      }
-    }
-  }
+  // Build forward curve from Term SOFR + swap rates
+  if (snapshot.termSOFR['1M']) snapshot.forwardCurve['1M'] = snapshot.termSOFR['1M'];
+  if (snapshot.termSOFR['3M']) snapshot.forwardCurve['3M'] = snapshot.termSOFR['3M'];
+  if (snapshot.overnightSOFR) snapshot.forwardCurve['O/N'] = snapshot.overnightSOFR;
 
   return snapshot;
 }
 
-function normalizeTenor(raw) {
-  if (!raw) return null;
-  const s = raw.trim().toUpperCase();
-
-  // Already normalized
-  if (/^\d+[MY]$/.test(s)) return s;
-
-  // "1 Month" -> "1M", "3 Year" -> "3Y"
-  const monthMatch = s.match(/(\d+)\s*(?:MONTH|MO|MTH)/i);
-  if (monthMatch) return monthMatch[1] + 'M';
-
-  const yearMatch = s.match(/(\d+)\s*(?:YEAR|YR)/i);
-  if (yearMatch) return yearMatch[1] + 'Y';
-
-  // "Overnight", "O/N"
-  if (/overnight|o\/n/i.test(s)) return '0M';
-
+function monthsToTenor(months) {
+  if (months === 12) return '1Y';
+  if (months === 24) return '2Y';
+  if (months === 36) return '3Y';
+  if (months === 48) return '4Y';
+  if (months === 60) return '5Y';
+  if (months === 72) return '6Y';
+  if (months === 84) return '7Y';
+  if (months === 96) return '8Y';
+  if (months === 120) return '10Y';
+  if (months === 144) return '12Y';
+  if (months === 180) return '15Y';
+  if (months === 240) return '20Y';
+  if (months === 360) return '30Y';
+  if (months < 12) return months + 'M';
   return null;
-}
-
-function categorizeRate(snapshot, tenor, rate) {
-  // Term SOFR: short-end fixings (1M, 3M, 6M, 12M)
-  const termSOFRTenors = ['1M', '3M', '6M', '12M'];
-  // Swap rates: annual tenors
-  const swapTenors = ['1Y', '2Y', '3Y', '4Y', '5Y', '7Y', '10Y', '15Y', '20Y', '30Y'];
-
-  if (termSOFRTenors.includes(tenor)) {
-    snapshot.termSOFR[tenor] = rate;
-  }
-  if (swapTenors.includes(tenor)) {
-    snapshot.swapRates[tenor] = rate;
-  }
-  // Everything goes into forward curve
-  snapshot.forwardCurve[tenor] = rate;
 }
 
 main();
