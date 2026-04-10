@@ -1,0 +1,42 @@
+name: Update SOFR Data
+
+on:
+  schedule:
+    - cron: '30 13 * * 1-5'   # 8:30am ET, Mon-Fri only
+  workflow_dispatch:            # Manual trigger button in GitHub UI
+
+permissions:
+  contents: write
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: |
+          npm install
+          npx playwright install chromium --with-deps
+
+      - name: Run scraper
+        run: node scrape.js
+        env:
+          CHATHAM_EMAIL: ${{ secrets.CHATHAM_EMAIL }}
+          CHATHAM_PASSWORD: ${{ secrets.CHATHAM_PASSWORD }}
+
+      - name: Commit updated data
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/
+          git diff --staged --quiet || git commit -m "chore: SOFR data update $(date -u +%Y-%m-%d)"
+          git push

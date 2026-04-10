@@ -1,0 +1,6 @@
+node_modules/
+.env
+data/login_page.png
+data/post_login.png
+data/error_screenshot.png
+data/latest_screenshot.png

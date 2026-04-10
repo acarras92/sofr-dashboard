@@ -1,0 +1,709 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SOFR Forward Curve Tracker</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #0f1419;
+    color: #e1e8ed;
+    min-height: 100vh;
+    padding: 24px;
+  }
+  .header {
+    text-align: center;
+    margin-bottom: 32px;
+    padding-bottom: 24px;
+    border-bottom: 1px solid #2a3040;
+  }
+  .header h1 {
+    font-size: 28px;
+    font-weight: 700;
+    color: #fff;
+    margin-bottom: 6px;
+  }
+  .header .subtitle {
+    font-size: 14px;
+    color: #8899a6;
+  }
+  .header .updated {
+    font-size: 13px;
+    color: #5c6e7e;
+    margin-top: 4px;
+  }
+
+  /* KPI Cards */
+  .kpi-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+    gap: 16px;
+    margin-bottom: 32px;
+  }
+  .kpi-card {
+    background: #1a1f2e;
+    border-radius: 10px;
+    padding: 18px 20px;
+    border: 1px solid #2a3040;
+  }
+  .kpi-card .label {
+    font-size: 12px;
+    color: #8899a6;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 8px;
+  }
+  .kpi-card .value {
+    font-size: 26px;
+    font-weight: 700;
+    color: #fff;
+  }
+  .kpi-card .change {
+    font-size: 13px;
+    margin-top: 4px;
+    font-weight: 500;
+  }
+  .kpi-card .change.positive { color: #e74c3c; }
+  .kpi-card .change.negative { color: #2ecc71; }
+  .kpi-card .change.neutral { color: #8899a6; }
+  .kpi-card.shape .value { font-size: 20px; }
+  .kpi-card.shape .spread { font-size: 13px; color: #8899a6; margin-top: 2px; }
+
+  /* Charts */
+  .chart-container {
+    background: #1a1f2e;
+    border-radius: 10px;
+    padding: 24px;
+    margin-bottom: 24px;
+    border: 1px solid #2a3040;
+  }
+  .chart-container h2 {
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 16px;
+    color: #fff;
+  }
+  .chart-wrap {
+    position: relative;
+    height: 350px;
+  }
+  .chart-controls {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+  .chart-controls button {
+    background: #252b3b;
+    color: #8899a6;
+    border: 1px solid #2a3040;
+    border-radius: 6px;
+    padding: 6px 14px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .chart-controls button:hover,
+  .chart-controls button.active {
+    background: #3b82f6;
+    color: #fff;
+    border-color: #3b82f6;
+  }
+
+  /* Data Table */
+  .table-container {
+    background: #1a1f2e;
+    border-radius: 10px;
+    padding: 24px;
+    margin-bottom: 24px;
+    border: 1px solid #2a3040;
+    overflow-x: auto;
+  }
+  .table-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+  }
+  .table-header h2 {
+    font-size: 16px;
+    font-weight: 600;
+    color: #fff;
+  }
+  .btn-export {
+    background: #252b3b;
+    color: #8899a6;
+    border: 1px solid #2a3040;
+    border-radius: 6px;
+    padding: 6px 14px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .btn-export:hover { background: #3b82f6; color: #fff; border-color: #3b82f6; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+  }
+  th {
+    text-align: left;
+    padding: 10px 14px;
+    color: #8899a6;
+    font-weight: 500;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border-bottom: 1px solid #2a3040;
+  }
+  td {
+    padding: 10px 14px;
+    border-bottom: 1px solid #1e2536;
+    color: #e1e8ed;
+  }
+  tr:hover td { background: #1e2536; }
+  .rate-up { color: #e74c3c; }
+  .rate-down { color: #2ecc71; }
+
+  /* Context Panel */
+  .context-panel {
+    background: #1a1f2e;
+    border-radius: 10px;
+    padding: 24px;
+    border: 1px solid #2a3040;
+    margin-bottom: 24px;
+  }
+  .context-panel h2 {
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 12px;
+    color: #fff;
+  }
+  .context-panel p {
+    font-size: 14px;
+    color: #8899a6;
+    line-height: 1.6;
+    margin-bottom: 10px;
+  }
+  .context-panel strong { color: #e1e8ed; }
+
+  .loading {
+    text-align: center;
+    padding: 60px;
+    color: #5c6e7e;
+    font-size: 16px;
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>SOFR Forward Curve Tracker</h1>
+  <div class="subtitle">Source: Chatham Financial | Updated daily at market open</div>
+  <div class="updated" id="lastUpdated">Loading...</div>
+</div>
+
+<div class="kpi-row" id="kpiRow"></div>
+
+<div class="chart-container">
+  <h2>Forward SOFR Curve</h2>
+  <div class="chart-controls" id="curveToggles"></div>
+  <div class="chart-wrap"><canvas id="curveChart"></canvas></div>
+</div>
+
+<div class="chart-container">
+  <h2>Rate Trends Over Time</h2>
+  <div class="chart-controls" id="trendRange"></div>
+  <div class="chart-wrap"><canvas id="trendChart"></canvas></div>
+</div>
+
+<div class="chart-container">
+  <h2>Curve Steepness: 2Y-10Y Spread (bps)</h2>
+  <div class="chart-wrap"><canvas id="spreadChart"></canvas></div>
+</div>
+
+<div class="table-container">
+  <div class="table-header">
+    <h2>Full Rate Table</h2>
+    <button class="btn-export" onclick="exportCSV()">Export CSV</button>
+  </div>
+  <table id="rateTable">
+    <thead>
+      <tr>
+        <th>Tenor</th>
+        <th>Current Rate</th>
+        <th>vs Yesterday (bps)</th>
+        <th>vs 1W (bps)</th>
+        <th>vs 1M (bps)</th>
+      </tr>
+    </thead>
+    <tbody id="rateTableBody"></tbody>
+  </table>
+</div>
+
+<div class="context-panel" id="contextPanel"></div>
+
+<script>
+const DATA_URL = 'data/sofr_history.json';
+const LATEST_URL = 'data/sofr_latest.json';
+
+let historyData = [];
+let latestData = null;
+let curveChart, trendChart, spreadChart;
+
+const TENOR_ORDER = ['0M','1M','3M','6M','9M','12M','18M','2Y','3Y','4Y','5Y','7Y','10Y','15Y','20Y','30Y'];
+
+function tenorIndex(t) {
+  const i = TENOR_ORDER.indexOf(t);
+  return i === -1 ? 999 : i;
+}
+
+function sortTenors(obj) {
+  return Object.keys(obj).sort((a, b) => tenorIndex(a) - tenorIndex(b));
+}
+
+function findByDate(data, targetDate) {
+  return data.find(d => d.date === targetDate);
+}
+
+function findByOffset(data, latest, days) {
+  const target = new Date(latest.date);
+  target.setDate(target.getDate() - days);
+  // Find closest date on or before target
+  let best = null;
+  for (const d of data) {
+    const dd = new Date(d.date);
+    if (dd <= target) {
+      if (!best || dd > new Date(best.date)) best = d;
+    }
+  }
+  return best;
+}
+
+function bpsChange(current, previous) {
+  if (current == null || previous == null) return null;
+  return Math.round((current - previous) * 100);
+}
+
+function formatBps(bps) {
+  if (bps == null) return { text: '--', cls: 'neutral' };
+  const sign = bps > 0 ? '+' : '';
+  // For a floating-rate borrower: rates up = bad (red), rates down = good (green)
+  const cls = bps > 0 ? 'positive' : bps < 0 ? 'negative' : 'neutral';
+  return { text: `${sign}${bps} bps`, cls };
+}
+
+async function loadData() {
+  try {
+    const [histRes, latestRes] = await Promise.all([
+      fetch(DATA_URL),
+      fetch(LATEST_URL)
+    ]);
+    historyData = await histRes.json();
+    latestData = await latestRes.json();
+  } catch (e) {
+    // Fallback: try history only
+    try {
+      const res = await fetch(DATA_URL);
+      historyData = await res.json();
+      latestData = historyData[historyData.length - 1];
+    } catch (e2) {
+      document.body.innerHTML = '<div class="loading">Failed to load data. Check that data files exist.</div>';
+      return;
+    }
+  }
+
+  renderAll();
+}
+
+function renderAll() {
+  const prev = historyData.length >= 2 ? historyData[historyData.length - 2] : null;
+  const weekAgo = findByOffset(historyData, latestData, 7);
+  const monthAgo = findByOffset(historyData, latestData, 30);
+
+  document.getElementById('lastUpdated').textContent =
+    `Last updated: ${latestData.date} at ${new Date(latestData.timestamp).toLocaleTimeString()}`;
+
+  renderKPIs(prev);
+  renderCurveChart();
+  renderTrendChart('3M');
+  renderSpreadChart();
+  renderTable(prev, weekAgo, monthAgo);
+  renderContext();
+}
+
+function renderKPIs(prev) {
+  const container = document.getElementById('kpiRow');
+  const cards = [];
+
+  // 1M Term SOFR
+  const termSofr1m = latestData.termSOFR['1M'];
+  const prevTermSofr1m = prev?.termSOFR?.['1M'];
+  cards.push(kpiCard('1M Term SOFR', termSofr1m ? termSofr1m.toFixed(2) + '%' : '--', bpsChange(termSofr1m, prevTermSofr1m)));
+
+  // 1Y Forward
+  const fwd1y = latestData.forwardCurve['12M'] || latestData.swapRates['1Y'];
+  const prevFwd1y = prev?.forwardCurve?.['12M'] || prev?.swapRates?.['1Y'];
+  cards.push(kpiCard('1Y Forward Rate', fwd1y ? fwd1y.toFixed(2) + '%' : '--', bpsChange(fwd1y, prevFwd1y)));
+
+  // 3Y Swap
+  const swap3y = latestData.swapRates['3Y'];
+  const prevSwap3y = prev?.swapRates?.['3Y'];
+  cards.push(kpiCard('3Y Swap Rate', swap3y ? swap3y.toFixed(2) + '%' : '--', bpsChange(swap3y, prevSwap3y)));
+
+  // 5Y Swap
+  const swap5y = latestData.swapRates['5Y'];
+  const prevSwap5y = prev?.swapRates?.['5Y'];
+  cards.push(kpiCard('5Y Swap Rate', swap5y ? swap5y.toFixed(2) + '%' : '--', bpsChange(swap5y, prevSwap5y)));
+
+  // 10Y Swap
+  const swap10y = latestData.swapRates['10Y'];
+  const prevSwap10y = prev?.swapRates?.['10Y'];
+  cards.push(kpiCard('10Y Swap Rate', swap10y ? swap10y.toFixed(2) + '%' : '--', bpsChange(swap10y, prevSwap10y)));
+
+  // Curve shape
+  const r2y = latestData.swapRates['2Y'] || latestData.forwardCurve['2Y'];
+  const r10y = latestData.swapRates['10Y'] || latestData.forwardCurve['10Y'];
+  let shapeLabel = '--', spreadBps = null;
+  if (r2y != null && r10y != null) {
+    spreadBps = Math.round((r10y - r2y) * 100);
+    if (spreadBps < -10) shapeLabel = 'Inverted';
+    else if (spreadBps > 10) shapeLabel = 'Normal';
+    else shapeLabel = 'Flat';
+  }
+  cards.push(`<div class="kpi-card shape">
+    <div class="label">Curve Shape</div>
+    <div class="value">${shapeLabel}</div>
+    <div class="spread">${spreadBps != null ? (spreadBps > 0 ? '+' : '') + spreadBps + ' bps (2Y-10Y)' : ''}</div>
+  </div>`);
+
+  container.innerHTML = cards.join('');
+}
+
+function kpiCard(label, value, bps) {
+  const chg = formatBps(bps);
+  return `<div class="kpi-card">
+    <div class="label">${label}</div>
+    <div class="value">${value}</div>
+    <div class="change ${chg.cls}">${chg.text}</div>
+  </div>`;
+}
+
+function renderCurveChart() {
+  const ctx = document.getElementById('curveChart').getContext('2d');
+  const tenors = sortTenors(latestData.forwardCurve);
+  const todayValues = tenors.map(t => latestData.forwardCurve[t]);
+
+  const datasets = [{
+    label: `Today (${latestData.date})`,
+    data: todayValues,
+    borderColor: '#3b82f6',
+    backgroundColor: 'rgba(59,130,246,0.1)',
+    borderWidth: 2.5,
+    pointRadius: 4,
+    pointBackgroundColor: '#3b82f6',
+    tension: 0.3,
+    fill: true
+  }];
+
+  // Historical overlays
+  const overlays = [
+    { days: 7, label: '1 Week Ago', color: '#eab308', dash: [6, 3] },
+    { days: 30, label: '1 Month Ago', color: '#f97316', dash: [6, 3] },
+    { days: 90, label: '3 Months Ago', color: '#ef4444', dash: [6, 3] }
+  ];
+
+  const toggleContainer = document.getElementById('curveToggles');
+  toggleContainer.innerHTML = '';
+
+  overlays.forEach(ov => {
+    const snap = findByOffset(historyData, latestData, ov.days);
+    if (snap) {
+      const vals = tenors.map(t => snap.forwardCurve?.[t] ?? null);
+      datasets.push({
+        label: `${ov.label} (${snap.date})`,
+        data: vals,
+        borderColor: ov.color,
+        borderWidth: 1.5,
+        borderDash: ov.dash,
+        pointRadius: 2,
+        pointBackgroundColor: ov.color,
+        tension: 0.3,
+        fill: false
+      });
+    }
+  });
+
+  curveChart = new Chart(ctx, {
+    type: 'line',
+    data: { labels: tenors, datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { intersect: false, mode: 'index' },
+      plugins: {
+        legend: { labels: { color: '#8899a6', font: { size: 12 } } },
+        tooltip: {
+          backgroundColor: '#1a1f2e',
+          titleColor: '#fff',
+          bodyColor: '#e1e8ed',
+          borderColor: '#2a3040',
+          borderWidth: 1,
+          callbacks: {
+            afterBody: function(items) {
+              if (items.length < 2) return '';
+              const todayVal = items[0].raw;
+              const lines = [];
+              for (let i = 1; i < items.length; i++) {
+                if (items[i].raw != null && todayVal != null) {
+                  const diff = Math.round((todayVal - items[i].raw) * 100);
+                  lines.push(`Change vs ${items[i].dataset.label.split(' (')[0]}: ${diff > 0 ? '+' : ''}${diff} bps`);
+                }
+              }
+              return lines.join('\n');
+            }
+          }
+        }
+      },
+      scales: {
+        x: { ticks: { color: '#5c6e7e' }, grid: { color: '#1e2536' } },
+        y: {
+          ticks: {
+            color: '#5c6e7e',
+            callback: v => v.toFixed(2) + '%'
+          },
+          grid: { color: '#1e2536' }
+        }
+      }
+    }
+  });
+}
+
+let currentTrendRange = '3M';
+
+function renderTrendChart(range) {
+  currentTrendRange = range;
+  const ctx = document.getElementById('trendChart').getContext('2d');
+
+  // Filter by range
+  const now = new Date(latestData.date);
+  let cutoff = new Date(now);
+  if (range === '1M') cutoff.setMonth(cutoff.getMonth() - 1);
+  else if (range === '3M') cutoff.setMonth(cutoff.getMonth() - 3);
+  else if (range === '6M') cutoff.setMonth(cutoff.getMonth() - 6);
+  else if (range === '1Y') cutoff.setFullYear(cutoff.getFullYear() - 1);
+  else cutoff = new Date('2000-01-01');
+
+  const filtered = range === 'All' ? historyData : historyData.filter(d => new Date(d.date) >= cutoff);
+  const labels = filtered.map(d => d.date);
+
+  const series = [
+    { key: '1Y', color: '#3b82f6' },
+    { key: '3Y', color: '#8b5cf6' },
+    { key: '5Y', color: '#f97316' },
+    { key: '10Y', color: '#ef4444' }
+  ];
+
+  const datasets = series.map(s => ({
+    label: `${s.key} Swap Rate`,
+    data: filtered.map(d => d.swapRates?.[s.key] ?? null),
+    borderColor: s.color,
+    borderWidth: 2,
+    pointRadius: filtered.length > 60 ? 0 : 3,
+    pointBackgroundColor: s.color,
+    tension: 0.3,
+    fill: false,
+    spanGaps: true
+  }));
+
+  if (trendChart) trendChart.destroy();
+  trendChart = new Chart(ctx, {
+    type: 'line',
+    data: { labels, datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { intersect: false, mode: 'index' },
+      plugins: {
+        legend: { labels: { color: '#8899a6', font: { size: 12 } } },
+        tooltip: {
+          backgroundColor: '#1a1f2e',
+          titleColor: '#fff',
+          bodyColor: '#e1e8ed',
+          borderColor: '#2a3040',
+          borderWidth: 1
+        }
+      },
+      scales: {
+        x: { ticks: { color: '#5c6e7e', maxTicksLimit: 12 }, grid: { color: '#1e2536' } },
+        y: {
+          ticks: { color: '#5c6e7e', callback: v => v.toFixed(2) + '%' },
+          grid: { color: '#1e2536' }
+        }
+      }
+    }
+  });
+
+  // Render range buttons
+  const container = document.getElementById('trendRange');
+  container.innerHTML = ['1M', '3M', '6M', '1Y', 'All'].map(r =>
+    `<button class="${r === range ? 'active' : ''}" onclick="renderTrendChart('${r}')">${r}</button>`
+  ).join('');
+}
+
+function renderSpreadChart() {
+  const ctx = document.getElementById('spreadChart').getContext('2d');
+  const labels = historyData.map(d => d.date);
+  const spreads = historyData.map(d => {
+    const r2y = d.swapRates?.['2Y'] ?? d.forwardCurve?.['2Y'];
+    const r10y = d.swapRates?.['10Y'] ?? d.forwardCurve?.['10Y'];
+    if (r2y != null && r10y != null) return Math.round((r10y - r2y) * 100);
+    return null;
+  });
+
+  const bgColors = spreads.map(s => s != null ? (s >= 0 ? 'rgba(46,204,113,0.7)' : 'rgba(231,76,60,0.7)') : 'transparent');
+  const borderColors = spreads.map(s => s != null ? (s >= 0 ? '#2ecc71' : '#e74c3c') : 'transparent');
+
+  spreadChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        label: '2Y-10Y Spread (bps)',
+        data: spreads,
+        backgroundColor: bgColors,
+        borderColor: borderColors,
+        borderWidth: 1
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { labels: { color: '#8899a6' } },
+        tooltip: {
+          backgroundColor: '#1a1f2e',
+          titleColor: '#fff',
+          bodyColor: '#e1e8ed',
+          borderColor: '#2a3040',
+          borderWidth: 1,
+          callbacks: {
+            label: item => `${item.raw > 0 ? '+' : ''}${item.raw} bps ${item.raw >= 0 ? '(Normal)' : '(Inverted)'}`
+          }
+        }
+      },
+      scales: {
+        x: { ticks: { color: '#5c6e7e' }, grid: { color: '#1e2536' } },
+        y: {
+          ticks: { color: '#5c6e7e', callback: v => v + ' bps' },
+          grid: { color: '#1e2536' }
+        }
+      }
+    }
+  });
+}
+
+function renderTable(prev, weekAgo, monthAgo) {
+  const tbody = document.getElementById('rateTableBody');
+  const allTenors = new Set();
+  for (const t of Object.keys(latestData.forwardCurve || {})) allTenors.add(t);
+  for (const t of Object.keys(latestData.swapRates || {})) allTenors.add(t);
+  for (const t of Object.keys(latestData.termSOFR || {})) allTenors.add(t);
+
+  const sorted = [...allTenors].sort((a, b) => tenorIndex(a) - tenorIndex(b));
+
+  const getRate = (snap, tenor) => {
+    if (!snap) return null;
+    return snap.forwardCurve?.[tenor] ?? snap.swapRates?.[tenor] ?? snap.termSOFR?.[tenor] ?? null;
+  };
+
+  let html = '';
+  for (const tenor of sorted) {
+    const current = getRate(latestData, tenor);
+    const dVsYday = bpsChange(current, getRate(prev, tenor));
+    const dVsWeek = bpsChange(current, getRate(weekAgo, tenor));
+    const dVsMonth = bpsChange(current, getRate(monthAgo, tenor));
+
+    const fmtY = formatBps(dVsYday);
+    const fmtW = formatBps(dVsWeek);
+    const fmtM = formatBps(dVsMonth);
+
+    html += `<tr>
+      <td><strong>${tenor}</strong></td>
+      <td>${current != null ? current.toFixed(2) + '%' : '--'}</td>
+      <td class="${fmtY.cls === 'positive' ? 'rate-up' : fmtY.cls === 'negative' ? 'rate-down' : ''}">${fmtY.text}</td>
+      <td class="${fmtW.cls === 'positive' ? 'rate-up' : fmtW.cls === 'negative' ? 'rate-down' : ''}">${fmtW.text}</td>
+      <td class="${fmtM.cls === 'positive' ? 'rate-up' : fmtM.cls === 'negative' ? 'rate-down' : ''}">${fmtM.text}</td>
+    </tr>`;
+  }
+  tbody.innerHTML = html;
+}
+
+function exportCSV() {
+  const allTenors = new Set();
+  for (const t of Object.keys(latestData.forwardCurve || {})) allTenors.add(t);
+  for (const t of Object.keys(latestData.swapRates || {})) allTenors.add(t);
+  for (const t of Object.keys(latestData.termSOFR || {})) allTenors.add(t);
+  const sorted = [...allTenors].sort((a, b) => tenorIndex(a) - tenorIndex(b));
+
+  let csv = 'Date';
+  sorted.forEach(t => csv += ',' + t);
+  csv += '\n';
+
+  historyData.forEach(snap => {
+    csv += snap.date;
+    sorted.forEach(t => {
+      const v = snap.forwardCurve?.[t] ?? snap.swapRates?.[t] ?? snap.termSOFR?.[t] ?? '';
+      csv += ',' + v;
+    });
+    csv += '\n';
+  });
+
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `sofr_data_${latestData.date}.csv`;
+  a.click();
+}
+
+function renderContext() {
+  const panel = document.getElementById('contextPanel');
+  const swap3y = latestData.swapRates?.['3Y'];
+  const swap5y = latestData.swapRates?.['5Y'];
+  const r2y = latestData.swapRates?.['2Y'] ?? latestData.forwardCurve?.['2Y'];
+  const r10y = latestData.swapRates?.['10Y'] ?? latestData.forwardCurve?.['10Y'];
+  const spreadBps = (r2y != null && r10y != null) ? Math.round((r10y - r2y) * 100) : null;
+
+  let capCost = '';
+  if (swap3y != null) {
+    // Rough cap cost approximation: higher rates = higher cap premiums
+    const costRange = swap3y > 5 ? '3.5-5.0%' : swap3y > 4 ? '2.0-3.5%' : swap3y > 3 ? '1.0-2.0%' : '0.5-1.5%';
+    capCost = `<p><strong>Cap Cost Context:</strong> With the 3Y swap rate at ${swap3y.toFixed(2)}%, indicative 3-year SOFR cap premiums (at-the-money) are approximately in the <strong>${costRange}</strong> of notional range. ${swap3y > 4.5 ? 'Cap costs remain elevated — consider whether a swap provides better economics.' : 'Cap costs are moderate at current rate levels.'}</p>`;
+  }
+
+  let hedgeTiming = '';
+  if (spreadBps != null) {
+    if (spreadBps < -10) {
+      hedgeTiming = `<p><strong>Hedge Timing:</strong> The curve is inverted (${spreadBps} bps 2Y-10Y spread), indicating the market expects rates to decline. For floating-rate borrowers, this suggests near-term rates remain elevated but are expected to fall. Consider shorter-dated hedges or caps that provide protection through the high-rate period without locking in long-term at today's elevated short rates.</p>`;
+    } else if (spreadBps > 25) {
+      hedgeTiming = `<p><strong>Hedge Timing:</strong> The curve is positively sloped (+${spreadBps} bps 2Y-10Y spread), suggesting rates could rise over time. Locking in a longer-dated swap at current levels may offer attractive economics relative to where floating rates could trend. This environment generally favors fixing sooner rather than later.</p>`;
+    } else {
+      hedgeTiming = `<p><strong>Hedge Timing:</strong> The curve is relatively flat (${spreadBps > 0 ? '+' : ''}${spreadBps} bps 2Y-10Y spread). In a flat curve environment, the cost difference between short-term and long-term hedges is minimal, giving borrowers flexibility to choose hedge tenor based on business needs rather than rate views.</p>`;
+    }
+  }
+
+  panel.innerHTML = `
+    <h2>Real Estate Investor Rate Context</h2>
+    ${capCost}
+    ${hedgeTiming}
+    <p style="font-size:12px; color:#5c6e7e; margin-top:12px;">This information is for reference only and does not constitute financial advice. Consult your hedging advisor for specific trade recommendations.</p>
+  `;
+}
+
+// Initialize
+loadData();
+</script>
+</body>
+</html>
