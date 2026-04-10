@@ -227,7 +227,10 @@
 <div class="table-container">
   <div class="table-header">
     <h2>Full Rate Table</h2>
-    <button class="btn-export" onclick="exportCSV()">Export CSV</button>
+    <div style="display:flex;gap:8px;">
+      <button class="btn-export" onclick="downloadTableCSV()">Download CSV</button>
+      <a class="btn-export" href="data/sofr_latest.csv" download style="text-decoration:none;display:inline-flex;align-items:center;">Latest CSV (raw)</a>
+    </div>
   </div>
   <table id="rateTable">
     <thead>
@@ -643,30 +646,26 @@ function renderTable(prev, weekAgo, monthAgo) {
   tbody.innerHTML = html;
 }
 
-function exportCSV() {
-  const allTenors = new Set();
-  for (const t of Object.keys(latestData.forwardCurve || {})) allTenors.add(t);
-  for (const t of Object.keys(latestData.swapRates || {})) allTenors.add(t);
-  for (const t of Object.keys(latestData.termSOFR || {})) allTenors.add(t);
-  const sorted = [...allTenors].sort((a, b) => tenorIndex(a) - tenorIndex(b));
-
-  let csv = 'Date';
-  sorted.forEach(t => csv += ',' + t);
-  csv += '\n';
-
-  historyData.forEach(snap => {
-    csv += snap.date;
-    sorted.forEach(t => {
-      const v = snap.forwardCurve?.[t] ?? snap.swapRates?.[t] ?? snap.termSOFR?.[t] ?? '';
-      csv += ',' + v;
+function downloadTableCSV() {
+  // Export exactly what's displayed in the rate table
+  const table = document.getElementById('rateTable');
+  const rows = table.querySelectorAll('tr');
+  let csv = '';
+  rows.forEach(row => {
+    const cells = row.querySelectorAll('th, td');
+    const values = [];
+    cells.forEach(cell => {
+      let text = cell.textContent.trim().replace(/,/g, '');
+      if (text.includes('"')) text = text.replace(/"/g, '""');
+      values.push(text);
     });
-    csv += '\n';
+    csv += values.join(',') + '\n';
   });
 
   const blob = new Blob([csv], { type: 'text/csv' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = `sofr_data_${latestData.date}.csv`;
+  a.download = `sofr_rates_${latestData.date}.csv`;
   a.click();
 }
 

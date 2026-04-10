@@ -1,0 +1,18 @@
+Tenor,Rate,Source
+O/N,3.59,Forward Curve
+30D,3.64783,Term SOFR
+90D,3.67024,Term SOFR
+1M,3.65832,Forward Curve
+3M,3.67854,Forward Curve
+6M,3.68686,Forward Curve
+1Y,3.705,Forward Curve
+2Y,3.613,Forward Curve
+3Y,3.567,Forward Curve
+5Y,3.601,Forward Curve
+7Y,3.698,Forward Curve
+10Y,3.84,Forward Curve
+15Y,4.041,Forward Curve
+20Y,4.1597,Forward Curve
+30Y,4.106,Forward Curve
+Fed Funds,3.64,Fed Funds Effective
+Prime,6.75,USD Prime

@@ -4,6 +4,7 @@ const path = require('path');
 const DATA_DIR = path.join(__dirname, 'data');
 const HISTORY_FILE = path.join(DATA_DIR, 'sofr_history.json');
 const LATEST_FILE = path.join(DATA_DIR, 'sofr_latest.json');
+const LATEST_CSV  = path.join(DATA_DIR, 'sofr_latest.csv');
 
 // Chatham Financial public API endpoints
 const API_BASE = 'https://cf.com/public-api/public-rates';
@@ -90,11 +91,54 @@ async function main() {
   fs.writeFileSync(HISTORY_FILE, JSON.stringify(history, null, 2));
   fs.writeFileSync(LATEST_FILE, JSON.stringify(snapshot, null, 2));
 
+  // Write flat CSV with Tenor, Rate, Source
+  writeLatestCSV(snapshot);
+
   const tenorCount = Object.keys(snapshot.forwardCurve).length +
     Object.keys(snapshot.swapRates).length +
     Object.keys(snapshot.termSOFR).length;
   console.log(`\n✓ Scraped SOFR data for ${today} — ${tenorCount} tenors captured`);
   console.log(`  History file: ${history.length} data points`);
+}
+
+function writeLatestCSV(snapshot) {
+  const TENOR_ORDER = ['O/N','30D','90D','1M','3M','6M','9M','12M','18M','1Y','2Y','3Y','4Y','5Y','6Y','7Y','8Y','10Y','12Y','15Y','20Y','30Y'];
+  const tenorIdx = t => { const i = TENOR_ORDER.indexOf(t); return i === -1 ? 999 : i; };
+
+  // Collect all tenors with their rate and source
+  const rows = [];
+  const seen = new Set();
+
+  const add = (tenor, rate, source) => {
+    if (seen.has(tenor) || rate == null) return;
+    seen.add(tenor);
+    rows.push({ tenor, rate, source });
+  };
+
+  // Forward curve (primary)
+  for (const [t, r] of Object.entries(snapshot.forwardCurve || {})) add(t, r, 'Forward Curve');
+  // Swap rates
+  for (const [t, r] of Object.entries(snapshot.swapRates || {})) add(t, r, 'SOFR OIS Swap');
+  // Term SOFR
+  for (const [t, r] of Object.entries(snapshot.termSOFR || {})) add(t, r, 'Term SOFR');
+  // Treasury yields
+  for (const [t, r] of Object.entries(snapshot.treasuryYields || {})) add(t, r, 'Treasury Yield');
+  // Term SOFR swaps
+  for (const [t, r] of Object.entries(snapshot.termSofrSwaps || {})) add(t, r, '1M Term SOFR Swap');
+  // Top-level rates
+  if (snapshot.overnightSOFR != null && !seen.has('O/N')) rows.push({ tenor: 'O/N', rate: snapshot.overnightSOFR, source: 'Overnight SOFR' });
+  if (snapshot.fedFundsRate != null) rows.push({ tenor: 'Fed Funds', rate: snapshot.fedFundsRate, source: 'Fed Funds Effective' });
+  if (snapshot.prime != null) rows.push({ tenor: 'Prime', rate: snapshot.prime, source: 'USD Prime' });
+
+  rows.sort((a, b) => tenorIdx(a.tenor) - tenorIdx(b.tenor));
+
+  let csv = 'Tenor,Rate,Source\n';
+  for (const r of rows) {
+    csv += `${r.tenor},${r.rate},${r.source}\n`;
+  }
+
+  fs.writeFileSync(LATEST_CSV, csv);
+  console.log(`  CSV written: ${rows.length} rows → data/sofr_latest.csv`);
 }
 
 async function fetchDirect() {
