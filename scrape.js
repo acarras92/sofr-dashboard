@@ -20,6 +20,16 @@ const ENDPOINTS = {
   prime:          `${API_BASE}/usdPrime.json`,
 };
 
+// Backup sources for forward SOFR curve
+const FRED_API_KEY = process.env.FRED_API_KEY || '';
+const FRED_SERIES = {
+  SOFR:      'SOFR',        // Overnight SOFR
+  SOFR30A:   'SOFR30DAYAVG', // 30-day SOFR average
+  SOFR90A:   'SOFR90DAYAVG', // 90-day SOFR average
+  SOFR180A:  'SOFR180DAYAVG', // 180-day SOFR average
+};
+const CME_TERM_SOFR_URL = 'https://www.cmegroup.com/services/sofr-strip-rates';
+
 const FETCH_HEADERS = {
   'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
   'Accept': 'application/json, text/plain, */*',
@@ -49,6 +59,17 @@ async function main() {
 
   // Build snapshot
   const snapshot = buildSnapshot(results);
+
+  // If Chatham didn't return swap/forward curve data, try backup sources
+  const hasSwaps = Object.keys(snapshot.swapRates).length > 0;
+  const hasForward = Object.keys(snapshot.forwardCurve).length > 2; // more than just O/N + 1M
+  if (!hasSwaps || !hasForward) {
+    console.log('\n⚠ Chatham missing swap/forward data — trying backup sources...');
+    await fetchBackupSources(snapshot);
+  } else {
+    // Even when Chatham works, supplement with backup data for completeness
+    await fetchBackupSources(snapshot, true);
+  }
 
   // Save to history
   let history = [];
@@ -154,6 +175,187 @@ async function fetchWithPlaywright() {
   }
 
   return results;
+}
+
+async function fetchBackupSources(snapshot, supplementOnly = false) {
+  const backupResults = await Promise.allSettled([
+    fetchFRED(snapshot, supplementOnly),
+    fetchCMETermSOFR(snapshot, supplementOnly),
+  ]);
+  for (const r of backupResults) {
+    if (r.status === 'rejected') {
+      console.log(`  ⚠ Backup source error: ${r.reason?.message || 'unknown'}`);
+    }
+  }
+}
+
+async function fetchFRED(snapshot, supplementOnly) {
+  if (!FRED_API_KEY) {
+    console.log('  ⊘ FRED: No API key set (FRED_API_KEY) — skipping');
+    return;
+  }
+  console.log('  Fetching FRED SOFR data...');
+  for (const [label, seriesId] of Object.entries(FRED_SERIES)) {
+    try {
+      const url = `https://api.stlouisfed.org/fred/series/observations?series_id=${seriesId}&api_key=${FRED_API_KEY}&file_type=json&sort_order=desc&limit=5`;
+      const res = await fetch(url);
+      if (!res.ok) continue;
+      const data = await res.json();
+      const obs = data.observations?.find(o => o.value !== '.');
+      if (obs) {
+        const rate = parseFloat(obs.value);
+        if (!isNaN(rate)) {
+          // Map FRED series to our snapshot fields
+          if (seriesId === 'SOFR') {
+            if (!snapshot.overnightSOFR || !supplementOnly) {
+              snapshot.overnightSOFR = snapshot.overnightSOFR || rate;
+              snapshot.backupSOFR = snapshot.backupSOFR || {};
+              snapshot.backupSOFR.overnightSOFR = rate;
+              snapshot.backupSOFR.overnightSOFR_date = obs.date;
+              console.log(`    ✓ FRED ${seriesId}: ${rate}% (${obs.date})`);
+            }
+          } else if (seriesId === 'SOFR30DAYAVG') {
+            snapshot.backupSOFR = snapshot.backupSOFR || {};
+            snapshot.backupSOFR.sofr30DayAvg = rate;
+            if (!snapshot.termSOFR['30D'] || !supplementOnly) {
+              snapshot.termSOFR['30D'] = snapshot.termSOFR['30D'] || rate;
+            }
+            console.log(`    ✓ FRED ${seriesId}: ${rate}% (${obs.date})`);
+          } else if (seriesId === 'SOFR90DAYAVG') {
+            snapshot.backupSOFR = snapshot.backupSOFR || {};
+            snapshot.backupSOFR.sofr90DayAvg = rate;
+            if (!snapshot.termSOFR['90D'] || !supplementOnly) {
+              snapshot.termSOFR['90D'] = snapshot.termSOFR['90D'] || rate;
+            }
+            console.log(`    ✓ FRED ${seriesId}: ${rate}% (${obs.date})`);
+          } else if (seriesId === 'SOFR180DAYAVG') {
+            snapshot.backupSOFR = snapshot.backupSOFR || {};
+            snapshot.backupSOFR.sofr180DayAvg = rate;
+            console.log(`    ✓ FRED ${seriesId}: ${rate}% (${obs.date})`);
+          }
+        }
+      }
+    } catch (e) { /* skip this series */ }
+  }
+}
+
+async function fetchCMETermSOFR(snapshot, supplementOnly) {
+  console.log('  Fetching CME Term SOFR...');
+  try {
+    // CME publishes Term SOFR strip rates
+    const res = await fetch(CME_TERM_SOFR_URL, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Accept': 'application/json',
+      }
+    });
+    if (!res.ok) {
+      // Try the HTML page as fallback for Term SOFR
+      const pageRes = await fetch('https://www.cmegroup.com/market-data/cme-group-benchmark-administration/term-sofr.html', {
+        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
+      });
+      if (pageRes.ok) {
+        const html = await pageRes.text();
+        // Extract rates from HTML using regex patterns
+        const ratePattern = /(\d+)\s*(?:Month|Mo)\s*Term\s*SOFR[^]*?(\d+\.\d+)/gi;
+        let match;
+        const cmeRates = {};
+        while ((match = ratePattern.exec(html)) !== null) {
+          const months = parseInt(match[1]);
+          const rate = parseFloat(match[2]);
+          if (!isNaN(rate) && rate > 0 && rate < 20) {
+            cmeRates[months + 'M'] = rate;
+          }
+        }
+        if (Object.keys(cmeRates).length > 0) {
+          snapshot.backupSOFR = snapshot.backupSOFR || {};
+          snapshot.backupSOFR.cmeTermSOFR = cmeRates;
+          console.log(`    ✓ CME Term SOFR (HTML): ${JSON.stringify(cmeRates)}`);
+          // Fill in missing termSOFR values
+          for (const [tenor, rate] of Object.entries(cmeRates)) {
+            if (!snapshot.termSOFR[tenor] || !supplementOnly) {
+              snapshot.termSOFR[tenor] = snapshot.termSOFR[tenor] || rate;
+            }
+          }
+        } else {
+          console.log('    ⊘ CME Term SOFR: Could not parse rates from HTML');
+        }
+      } else {
+        console.log(`    ⊘ CME Term SOFR: HTTP ${res.status} — skipping`);
+      }
+      return;
+    }
+    const data = await res.json();
+    snapshot.backupSOFR = snapshot.backupSOFR || {};
+    console.log(`    ✓ CME Term SOFR API`);
+
+    // Parse CME strip data — contains Term SOFR fixings + forward curve
+    const latestStrip = data.resultsStrip?.[0];
+    const latestCurve = data.resultsCurve?.[0];
+
+    // Term SOFR fixings (1M, 3M, 6M, 1Y)
+    if (latestStrip?.rates?.sofrRatesFixing) {
+      const cmeFixings = {};
+      for (const fix of latestStrip.rates.sofrRatesFixing) {
+        const rate = parseFloat(fix.price);
+        if (fix.term && !isNaN(rate)) {
+          cmeFixings[fix.term] = rate;
+          if (!supplementOnly || !snapshot.termSOFR[fix.term]) {
+            snapshot.termSOFR[fix.term] = snapshot.termSOFR[fix.term] || rate;
+          }
+          // Add 6M and 1Y to forward curve if missing
+          if (fix.term === '6M' || fix.term === '1Y') {
+            snapshot.forwardCurve[fix.term] = snapshot.forwardCurve[fix.term] || rate;
+          }
+        }
+      }
+      snapshot.backupSOFR.cmeTermSOFRFixings = cmeFixings;
+      console.log(`    ✓ CME fixings: ${Object.entries(cmeFixings).map(([k,v]) => `${k}=${v}%`).join(', ')}`);
+    }
+
+    // SOFR averages from strip
+    if (latestStrip) {
+      if (latestStrip.average30day) {
+        snapshot.backupSOFR.cme30DayAvg = latestStrip.average30day;
+      }
+      if (latestStrip.average90day) {
+        snapshot.backupSOFR.cme90DayAvg = latestStrip.average90day;
+      }
+      if (latestStrip.average180day) {
+        snapshot.backupSOFR.cme180DayAvg = latestStrip.average180day;
+      }
+    }
+
+    // SOFR OIS swap curve (1Y-30Y) — the actual forward curve
+    if (latestCurve?.rates?.sofrRates) {
+      const cmeCurve = {};
+      for (const pt of latestCurve.rates.sofrRates) {
+        const rate = parseFloat(pt.price);
+        if (pt.term && !isNaN(rate)) {
+          cmeCurve[pt.term] = rate;
+          if (!supplementOnly || !snapshot.forwardCurve[pt.term]) {
+            snapshot.forwardCurve[pt.term] = snapshot.forwardCurve[pt.term] || rate;
+          }
+          if (!supplementOnly || !snapshot.swapRates[pt.term]) {
+            snapshot.swapRates[pt.term] = snapshot.swapRates[pt.term] || rate;
+          }
+        }
+      }
+      snapshot.backupSOFR.cmeSofrCurve = cmeCurve;
+      console.log(`    ✓ CME SOFR curve: ${Object.entries(cmeCurve).map(([k,v]) => `${k}=${v}%`).join(', ')}`);
+    }
+
+    // SOFR-Fed Funds basis
+    if (latestCurve?.rates?.sofrFedFundRates) {
+      const basis = {};
+      for (const pt of latestCurve.rates.sofrFedFundRates) {
+        basis[pt.term] = parseFloat(pt.price);
+      }
+      snapshot.backupSOFR.cmeSofrFedFundBasis = basis;
+    }
+  } catch (e) {
+    console.log(`    ⊘ CME Term SOFR: ${e.message}`);
+  }
 }
 
 function buildSnapshot(results) {
