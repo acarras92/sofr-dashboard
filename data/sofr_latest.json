@@ -1,68 +1,68 @@
 {
-  "date": "2026-06-30",
-  "timestamp": "2026-06-30T14:17:58.904Z",
+  "date": "2026-07-01",
+  "timestamp": "2026-07-01T14:18:45.526Z",
   "source": "CME Group — SOFR strip rates (fallback)",
-  "curveDate": "June-30-2026",
+  "curveDate": "July-1-2026",
   "forwardCurve": [
     {
-      "date": "July-26",
+      "date": "August-26",
       "year": 2026,
-      "month": 7,
-      "sofr": 3.65197
+      "month": 8,
+      "sofr": 3.66407
     },
     {
-      "date": "September-26",
+      "date": "October-26",
       "year": 2026,
-      "month": 9,
-      "sofr": 3.73372
+      "month": 10,
+      "sofr": 3.75019
     },
     {
-      "date": "December-26",
-      "year": 2026,
-      "month": 12,
-      "sofr": 3.8494
-    },
-    {
-      "date": "June-27",
+      "date": "January-27",
       "year": 2027,
-      "month": 6,
-      "sofr": 3.981
+      "month": 1,
+      "sofr": 3.86745
     },
     {
-      "date": "June-28",
+      "date": "July-27",
+      "year": 2027,
+      "month": 7,
+      "sofr": 4.0111
+    },
+    {
+      "date": "July-28",
       "year": 2028,
-      "month": 6,
-      "sofr": 3.9572
+      "month": 7,
+      "sofr": 3.9924
     },
     {
-      "date": "June-29",
+      "date": "July-29",
       "year": 2029,
-      "month": 6,
-      "sofr": 3.8944
+      "month": 7,
+      "sofr": 3.9332
     },
     {
-      "date": "June-31",
+      "date": "July-31",
       "year": 2031,
-      "month": 6,
-      "sofr": 3.8543
+      "month": 7,
+      "sofr": 3.8983
     },
     {
-      "date": "June-36",
+      "date": "July-36",
       "year": 2036,
-      "month": 6,
-      "sofr": 3.9699
+      "month": 7,
+      "sofr": 4.0138
     },
     {
-      "date": "June-46",
+      "date": "July-46",
       "year": 2046,
-      "month": 6,
-      "sofr": 4.1841
+      "month": 7,
+      "sofr": 4.224
     },
     {
-      "date": "June-56",
+      "date": "July-56",
       "year": 2056,
-      "month": 6,
-      "sofr": 4.1365
+      "month": 7,
+      "sofr": 4.1782
     }
   ]
 }
