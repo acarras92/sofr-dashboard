@@ -1,68 +1,68 @@
 {
-  "date": "2026-07-31",
-  "timestamp": "2026-07-31T14:16:54.087Z",
+  "date": "2026-08-03",
+  "timestamp": "2026-08-03T14:19:05.690Z",
   "source": "CME Group — SOFR strip rates (fallback)",
-  "curveDate": "July-31-2026",
+  "curveDate": "August-3-2026",
   "forwardCurve": [
     {
-      "date": "August-26",
+      "date": "September-26",
       "year": 2026,
+      "month": 9,
+      "sofr": 3.65011
+    },
+    {
+      "date": "November-26",
+      "year": 2026,
+      "month": 11,
+      "sofr": 3.75868
+    },
+    {
+      "date": "February-27",
+      "year": 2027,
+      "month": 2,
+      "sofr": 3.90002
+    },
+    {
+      "date": "August-27",
+      "year": 2027,
       "month": 8,
-      "sofr": 3.65677
+      "sofr": 4.0915
     },
     {
-      "date": "October-26",
-      "year": 2026,
-      "month": 10,
-      "sofr": 3.75092
-    },
-    {
-      "date": "January-27",
-      "year": 2027,
-      "month": 1,
-      "sofr": 3.87762
-    },
-    {
-      "date": "July-27",
-      "year": 2027,
-      "month": 7,
-      "sofr": 4.0437
-    },
-    {
-      "date": "July-28",
+      "date": "August-28",
       "year": 2028,
-      "month": 7,
-      "sofr": 4.0846
+      "month": 8,
+      "sofr": 4.1492
     },
     {
-      "date": "July-29",
+      "date": "August-29",
       "year": 2029,
-      "month": 7,
-      "sofr": 4.0778
+      "month": 8,
+      "sofr": 4.1515
     },
     {
-      "date": "July-31",
+      "date": "August-31",
       "year": 2031,
-      "month": 7,
-      "sofr": 4.0957
+      "month": 8,
+      "sofr": 4.18
     },
     {
-      "date": "July-36",
+      "date": "August-36",
       "year": 2036,
-      "month": 7,
-      "sofr": 4.264
+      "month": 8,
+      "sofr": 4.3497
     },
     {
-      "date": "July-46",
+      "date": "August-46",
       "year": 2046,
-      "month": 7,
-      "sofr": 4.506
+      "month": 8,
+      "sofr": 4.5848
     },
     {
-      "date": "July-56",
+      "date": "August-56",
       "year": 2056,
-      "month": 7,
-      "sofr": 4.4672
+      "month": 8,
+      "sofr": 4.5402
     }
   ]
 }
