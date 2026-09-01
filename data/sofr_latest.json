@@ -1,68 +1,68 @@
 {
-  "date": "2026-08-31",
-  "timestamp": "2026-08-31T19:34:06.689Z",
+  "date": "2026-09-01",
+  "timestamp": "2026-09-01T17:23:00.679Z",
   "source": "CME Group — SOFR strip rates (fallback)",
-  "curveDate": "August-31-2026",
+  "curveDate": "September-1-2026",
   "forwardCurve": [
     {
-      "date": "September-26",
+      "date": "October-26",
       "year": 2026,
+      "month": 10,
+      "sofr": 3.73712
+    },
+    {
+      "date": "December-26",
+      "year": 2026,
+      "month": 12,
+      "sofr": 3.82835
+    },
+    {
+      "date": "March-27",
+      "year": 2027,
+      "month": 3,
+      "sofr": 3.96494
+    },
+    {
+      "date": "September-27",
+      "year": 2027,
       "month": 9,
-      "sofr": 3.70808
+      "sofr": 4.1514
     },
     {
-      "date": "November-26",
-      "year": 2026,
-      "month": 11,
-      "sofr": 3.80104
-    },
-    {
-      "date": "February-27",
-      "year": 2027,
-      "month": 2,
-      "sofr": 3.93606
-    },
-    {
-      "date": "August-27",
-      "year": 2027,
-      "month": 8,
-      "sofr": 4.1515
-    },
-    {
-      "date": "August-28",
+      "date": "September-28",
       "year": 2028,
-      "month": 8,
-      "sofr": 4.2134
+      "month": 9,
+      "sofr": 4.2178
     },
     {
-      "date": "August-29",
+      "date": "September-29",
       "year": 2029,
-      "month": 8,
-      "sofr": 4.2104
+      "month": 9,
+      "sofr": 4.2215
     },
     {
-      "date": "August-31",
+      "date": "September-31",
       "year": 2031,
-      "month": 8,
-      "sofr": 4.2157
+      "month": 9,
+      "sofr": 4.2409
     },
     {
-      "date": "August-36",
+      "date": "September-36",
       "year": 2036,
-      "month": 8,
-      "sofr": 4.3629
+      "month": 9,
+      "sofr": 4.3986
     },
     {
-      "date": "August-46",
+      "date": "September-46",
       "year": 2046,
-      "month": 8,
-      "sofr": 4.5835
+      "month": 9,
+      "sofr": 4.6261
     },
     {
-      "date": "August-56",
+      "date": "September-56",
       "year": 2056,
-      "month": 8,
-      "sofr": 4.543
+      "month": 9,
+      "sofr": 4.5868
     }
   ]
 }
