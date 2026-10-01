@@ -1,68 +1,68 @@
 {
-  "date": "2026-09-30",
-  "timestamp": "2026-09-30T18:30:57.389Z",
+  "date": "2026-10-01",
+  "timestamp": "2026-10-01T18:59:27.595Z",
   "source": "CME Group — SOFR strip rates (fallback)",
-  "curveDate": "September-30-2026",
+  "curveDate": "October-1-2026",
   "forwardCurve": [
     {
-      "date": "October-26",
+      "date": "November-26",
       "year": 2026,
+      "month": 11,
+      "sofr": 3.91628
+    },
+    {
+      "date": "January-27",
+      "year": 2027,
+      "month": 1,
+      "sofr": 4.0473
+    },
+    {
+      "date": "April-27",
+      "year": 2027,
+      "month": 4,
+      "sofr": 4.22578
+    },
+    {
+      "date": "October-27",
+      "year": 2027,
       "month": 10,
-      "sofr": 3.91252
+      "sofr": 4.5426
     },
     {
-      "date": "December-26",
-      "year": 2026,
-      "month": 12,
-      "sofr": 4.0833
-    },
-    {
-      "date": "March-27",
-      "year": 2027,
-      "month": 3,
-      "sofr": 4.26907
-    },
-    {
-      "date": "September-27",
-      "year": 2027,
-      "month": 9,
-      "sofr": 4.5625
-    },
-    {
-      "date": "September-28",
+      "date": "October-28",
       "year": 2028,
-      "month": 9,
-      "sofr": 4.7467
+      "month": 10,
+      "sofr": 4.7443
     },
     {
-      "date": "September-29",
+      "date": "October-29",
       "year": 2029,
-      "month": 9,
-      "sofr": 4.7827
+      "month": 10,
+      "sofr": 4.793
     },
     {
-      "date": "September-31",
+      "date": "October-31",
       "year": 2031,
-      "month": 9,
-      "sofr": 4.7957
+      "month": 10,
+      "sofr": 4.8196
     },
     {
-      "date": "September-36",
+      "date": "October-36",
       "year": 2036,
-      "month": 9,
-      "sofr": 4.8985
+      "month": 10,
+      "sofr": 4.9279
     },
     {
-      "date": "September-46",
+      "date": "October-46",
       "year": 2046,
-      "month": 9,
-      "sofr": 5.0404
+      "month": 10,
+      "sofr": 5.0771
     },
     {
-      "date": "September-56",
+      "date": "October-56",
       "year": 2056,
-      "month": 9,
-      "sofr": 4.9625
+      "month": 10,
+      "sofr": 5.0008
     }
   ]
 }
